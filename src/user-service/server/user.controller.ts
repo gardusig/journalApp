@@ -2,8 +2,8 @@ import { Body, Inject, Param } from "@nestjs/common";
 import {
   AbstractController,
   ApiResponse,
-} from "shared/api/abstract.controller";
-import { AbstractService } from "shared/api/abstract.service";
+} from "shared/server/api/abstract.controller";
+import { AbstractService } from "shared/server/api/abstract.service";
 
 import { UserDto } from "./user.dto";
 import { UserServiceToken } from "./user.service";

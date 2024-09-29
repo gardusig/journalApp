@@ -3,15 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
-import { AbstractService } from "shared/api/abstract.service";
+import { PrismaClient, User } from "@prisma/client";
+import { AbstractService } from "shared/server/api/abstract.service";
 
 import { UserDto } from "./user.dto";
 
 export const UserServiceToken = "UserService";
 
 @Injectable()
-export class UserService extends AbstractService<UserDto> {
+export class UserService extends AbstractService<User> {
   constructor() {
     super(new PrismaClient().user, "id");
   }
