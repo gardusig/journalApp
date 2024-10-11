@@ -5,10 +5,10 @@ import {
 } from "shared/server/api/abstract.controller";
 import { AbstractService } from "shared/server/api/abstract.service";
 
-import { UserDto } from "./user.dto";
+import { UserDto } from "../dto/user.dto";
 import { UserServiceToken } from "./user.service";
 
-@AbstractController.ApplyDecoratorsController(UserDto)
+@AbstractController.ApplyDecoratorsController("user")
 export class UserController extends AbstractController<UserDto> {
   constructor(@Inject(UserServiceToken) service: AbstractService<UserDto>) {
     super(service);
