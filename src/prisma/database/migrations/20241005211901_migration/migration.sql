@@ -26,9 +26,8 @@ CREATE TABLE "Journal" (
 CREATE TABLE "UserSession" (
     "id" UUID NOT NULL,
     "userId" UUID NOT NULL,
-    "token" TEXT NOT NULL,
+    "refreshToken" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "UserSession_pkey" PRIMARY KEY ("id")
 );

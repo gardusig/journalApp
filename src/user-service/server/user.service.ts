@@ -6,7 +6,7 @@ import {
 import { PrismaClient, User } from "@prisma/client";
 import { AbstractService } from "shared/server/api/abstract.service";
 
-import { UserDto } from "./user.dto";
+import { UserDto } from "../dto/user.dto";
 
 export const UserServiceToken = "UserService";
 

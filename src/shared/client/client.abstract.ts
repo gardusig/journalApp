@@ -1,11 +1,9 @@
-import axios, {
-  AxiosError,
-  AxiosInstance,
-  InternalAxiosRequestConfig,
-} from "axios";
-import axiosRetry from "axios-retry";
+import { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 
-import { AuthenticationToken, getValidToken } from "./client.authentication";
+import {
+  AuthenticationClient,
+  AuthenticationClientInterface,
+} from "./client.authentication";
 import {
   ApiResponse,
   callCreateAPI,
@@ -14,16 +12,23 @@ import {
   callRemoveAPI,
   callUpdateAPI,
 } from "./client.crud.api";
+import { createAxiosInstance } from "./client.util";
 
 export abstract class AbstractApiClient<T> {
   private readonly axiosInstance: AxiosInstance;
-  private authenticationToken: AuthenticationToken | null;
+  private authenticationClient: AuthenticationClientInterface | null;
 
   constructor(baseURL: string, resourcePath: string) {
-    this.axiosInstance = this.createAxiosInstance(baseURL, resourcePath);
-    this.authenticationToken = null;
-    this.setupRetryLogic();
+    this.axiosInstance = createAxiosInstance(`${baseURL}/${resourcePath}`);
+    this.authenticationClient = null;
     this.initializeInterceptors();
+  }
+
+  withAuthenticationClient(
+    authenticationClient: AuthenticationClient,
+  ): AbstractApiClient<T> {
+    this.authenticationClient = authenticationClient;
+    return this;
   }
 
   async findAll(): Promise<ApiResponse<T[]>> {
@@ -46,51 +51,33 @@ export abstract class AbstractApiClient<T> {
     return callCreateAPI(this.axiosInstance, entity);
   }
 
-  private createAxiosInstance(
-    baseURL: string,
-    resourcePath: string,
-  ): AxiosInstance {
-    return axios.create({
-      baseURL: `${baseURL}/${resourcePath}`,
-      timeout: 5 * 1000, // 5 seconds timeout
-    });
-  }
-
   private initializeInterceptors() {
     this.axiosInstance.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
-        this.authenticationToken = await getValidToken(
-          this.authenticationToken,
-        );
-        return this.attachAuthHeaders(config, this.authenticationToken);
+        if (this.authenticationClient) {
+          const token = await this.authenticationClient.getValidToken();
+          return this.attachAuthHeaders(config, token);
+        }
+        return config;
       },
       (error: AxiosError) => Promise.reject(error),
     );
-  }
-
-  private setupRetryLogic() {
-    axiosRetry(this.axiosInstance, {
-      retries: 3,
-      retryDelay: (retryCount: number) => {
-        console.log(`Retry attempt: ${retryCount}`);
-        return (1 << retryCount) * 1000;
+    this.axiosInstance.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        console.error("API call failed:", error);
+        return Promise.reject(error);
       },
-      retryCondition: (error: AxiosError) => {
-        return (
-          axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-          (error.response?.status !== undefined && error.response.status >= 500)
-        );
-      },
-    });
+    );
   }
 
   private async attachAuthHeaders(
     config: InternalAxiosRequestConfig,
-    authenticationToken: AuthenticationToken | null,
+    authenticationToken: string | null,
   ): Promise<InternalAxiosRequestConfig> {
     if (authenticationToken) {
       config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${authenticationToken.accessToken}`;
+      config.headers.Authorization = `Bearer ${authenticationToken}`;
     }
     return config;
   }
