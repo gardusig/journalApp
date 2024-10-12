@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 
 import {
@@ -15,6 +16,8 @@ import {
 import { createAxiosInstance } from "./client.util";
 
 export abstract class AbstractApiClient<T> {
+  protected readonly logger = new Logger(AbstractApiClient.name);
+
   private readonly axiosInstance: AxiosInstance;
   private authenticationClient: AuthenticationClientInterface | null;
 
@@ -56,6 +59,7 @@ export abstract class AbstractApiClient<T> {
       async (config: InternalAxiosRequestConfig) => {
         if (this.authenticationClient) {
           const token = await this.authenticationClient.getValidToken();
+          this.logger.debug("token:", token);
           return this.attachAuthHeaders(config, token);
         }
         return config;
@@ -65,7 +69,7 @@ export abstract class AbstractApiClient<T> {
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        console.error("API call failed:", error);
+        this.logger.error("API call failed:", error);
         return Promise.reject(error);
       },
     );

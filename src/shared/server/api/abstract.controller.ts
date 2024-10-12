@@ -13,8 +13,8 @@ import {
   ApiParam,
   ApiBody,
   ApiTags,
+  ApiBearerAuth,
 } from "@nestjs/swagger";
-import { ApiHeader } from "@nestjs/swagger";
 
 import { AbstractService } from "./abstract.service";
 
@@ -53,8 +53,13 @@ export abstract class AbstractController<T> {
     return await this.service.delete(id);
   }
 
+  static ApplyDecoratorsController(prefix: string) {
+    return applyDecorators(ApiTags(prefix), Controller(prefix));
+  }
+
   static ApplyDecoratorsDelete<T>(entity: new (...args: any[]) => T) {
     return applyDecorators(
+      ApiBearerAuth(),
       Delete(":id"),
       ApiOperation({ summary: `Delete a ${entity.name} by ID` }),
       ApiResponse({
@@ -83,31 +88,20 @@ export abstract class AbstractController<T> {
     );
   }
 
-  static ApplyAuthHeaders(authenticationToken?: string) {
+  static ApplyDecoratorsGetById<T>(
+    entityName: string,
+    entityType: new (...args: any[]) => T,
+  ) {
     return applyDecorators(
-      ApiHeader({
-        name: "Authorization",
-        description: "Bearer token for authentication",
-        required: true,
-        example: `Bearer ${authenticationToken || "your_jwt_token"}`,
-      }),
-    );
-  }
-
-  static ApplyDecoratorsController(prefix: string) {
-    return applyDecorators(ApiTags(prefix), Controller(prefix));
-  }
-
-  static ApplyDecoratorsGetById<T>(entity: new (...args: any[]) => T) {
-    return applyDecorators(
+      ApiBearerAuth(),
       Get(":id"),
       ApiOperation({
-        summary: `Retrieve a ${entity.name} by ID`,
+        summary: `Retrieve a ${entityName} by ID`,
       }),
       ApiResponse({
         status: 200,
-        description: `The found ${entity.name}`,
-        type: entity,
+        description: `The found ${entityName}`,
+        type: entityType,
         example: {
           id: "123e4567-e89b-12d3-a456-426614174000",
           name: "Sample Name",
@@ -115,9 +109,9 @@ export abstract class AbstractController<T> {
       }),
       ApiResponse({
         status: 404,
-        description: `${entity.name} not found`,
+        description: `${entityName} not found`,
         example: {
-          message: `${entity.name} not found`,
+          message: `${entityName} not found`,
           id: "123e4567-e89b-12d3-a456-426614174000",
         },
       }),
@@ -126,6 +120,7 @@ export abstract class AbstractController<T> {
 
   static ApplyDecoratorsGetAll<T>(entity: new (...args: any[]) => T) {
     return applyDecorators(
+      ApiBearerAuth(),
       Get(),
       ApiOperation({ summary: `Retrieve all ${entity.name}(s)` }),
       ApiResponse({
@@ -141,6 +136,7 @@ export abstract class AbstractController<T> {
 
   static ApplyDecoratorsCreate<T>(entity: new (...args: any[]) => T) {
     return applyDecorators(
+      ApiBearerAuth(),
       Post(),
       ApiOperation({ summary: `Create a new ${entity.name}` }),
       ApiResponse({
@@ -169,6 +165,7 @@ export abstract class AbstractController<T> {
 
   static ApplyDecoratorsUpdate<T>(entity: new (...args: any[]) => T) {
     return applyDecorators(
+      ApiBearerAuth(),
       Put(":id"),
       ApiOperation({ summary: `Update an existing ${entity.name} by ID` }),
       ApiResponse({

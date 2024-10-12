@@ -13,17 +13,13 @@ export class AuthMiddleware implements NestMiddleware {
         `, params: ${JSON.stringify(req.params)}` +
         `, body: ${JSON.stringify(req.body)}`,
     );
-    const { username, password } = req.headers;
-    if (!username || !password) {
+    const authHeader = req.headers["authorization"]; // Get Authorization header
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
         .status(HttpStatus.UNAUTHORIZED)
-        .json({ message: "Username and password headers are required" });
+        .json({ message: "Authorization header is missing or invalid" });
     }
-    if (username !== "admin") {
-      return res
-        .status(HttpStatus.FORBIDDEN)
-        .json({ message: "User does not have permission" });
-    }
+    this.logger.debug("token: ", authHeader);
     next();
   }
 }
