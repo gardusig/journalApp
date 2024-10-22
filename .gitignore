@@ -51,3 +51,5 @@ tsconfig.tsbuildinfo
 
 # Docker volumes
 pgdata/
+
+coverage/

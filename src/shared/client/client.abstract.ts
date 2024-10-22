@@ -1,97 +1,180 @@
-import axios, {
-  AxiosError,
-  AxiosInstance,
-  InternalAxiosRequestConfig,
-} from "axios";
-import axiosRetry from "axios-retry";
+import { Logger } from "@nestjs/common";
+import { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from "axios";
 
-import { AuthenticationToken, getValidToken } from "./client.authentication";
 import {
-  ApiResponse,
-  callCreateAPI,
-  callFindAllAPI,
-  callFindByIdAPI,
-  callRemoveAPI,
-  callUpdateAPI,
-} from "./client.crud.api";
+  AuthenticationClient,
+  AuthenticationClientInterface,
+} from "./client.authentication";
+import { createAxiosInstance } from "./client.util";
 
-export abstract class AbstractApiClient<T> {
+export interface ApiResponse<T> {
+  data: T | null;
+  error?: string;
+}
+
+export abstract class AbstractApiClient<
+  CreateRequestDto,
+  UpdateRequestDto,
+  ResponseDto,
+  ResponseListDto,
+> {
+  protected readonly logger = new Logger(AbstractApiClient.name);
+
   private readonly axiosInstance: AxiosInstance;
-  private authenticationToken: AuthenticationToken | null;
+  private authenticationClient: AuthenticationClientInterface | null;
 
   constructor(baseURL: string, resourcePath: string) {
-    this.axiosInstance = this.createAxiosInstance(baseURL, resourcePath);
-    this.authenticationToken = null;
-    this.setupRetryLogic();
+    this.axiosInstance = createAxiosInstance(`${baseURL}/${resourcePath}`);
+    this.authenticationClient = null;
     this.initializeInterceptors();
   }
 
-  async findAll(): Promise<ApiResponse<T[]>> {
-    return callFindAllAPI(this.axiosInstance);
+  public withAuthenticationClient(
+    authenticationClient: AuthenticationClient,
+  ): AbstractApiClient<
+    CreateRequestDto,
+    UpdateRequestDto,
+    ResponseDto,
+    ResponseListDto
+  > {
+    this.authenticationClient = authenticationClient;
+    return this;
   }
 
-  async findById(id: string): Promise<ApiResponse<T | null>> {
-    return callFindByIdAPI(this.axiosInstance, id);
-  }
-
-  async update(id: string, entity: T): Promise<ApiResponse<T | null>> {
-    return callUpdateAPI(this.axiosInstance, id, entity);
-  }
-
-  async delete(id: string): Promise<ApiResponse<T | null>> {
-    return callRemoveAPI(this.axiosInstance, id);
-  }
-
-  async create(entity: T): Promise<ApiResponse<T | null>> {
-    return callCreateAPI(this.axiosInstance, entity);
-  }
-
-  private createAxiosInstance(
-    baseURL: string,
-    resourcePath: string,
-  ): AxiosInstance {
-    return axios.create({
-      baseURL: `${baseURL}/${resourcePath}`,
-      timeout: 5 * 1000, // 5 seconds timeout
-    });
-  }
-
-  private initializeInterceptors() {
-    this.axiosInstance.interceptors.request.use(
-      async (config: InternalAxiosRequestConfig) => {
-        this.authenticationToken = await getValidToken(
-          this.authenticationToken,
-        );
-        return this.attachAuthHeaders(config, this.authenticationToken);
-      },
-      (error: AxiosError) => Promise.reject(error),
+  public async findAll(): Promise<ApiResponse<ResponseListDto>> {
+    return await this.makeApiRequest<undefined, ResponseListDto>(
+      `/`,
+      "get",
+      undefined,
+      `Failed to fetch all entities`,
     );
   }
 
-  private setupRetryLogic() {
-    axiosRetry(this.axiosInstance, {
-      retries: 3,
-      retryDelay: (retryCount: number) => {
-        console.log(`Retry attempt: ${retryCount}`);
-        return (1 << retryCount) * 1000;
-      },
-      retryCondition: (error: AxiosError) => {
-        return (
-          axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-          (error.response?.status !== undefined && error.response.status >= 500)
-        );
-      },
-    });
+  public async create(
+    entity: CreateRequestDto,
+  ): Promise<ApiResponse<ResponseDto>> {
+    return this.makeApiRequest<CreateRequestDto, ResponseDto>(
+      `/`,
+      "post",
+      entity,
+      `Failed to create entity`,
+    );
   }
 
-  private async attachAuthHeaders(
-    config: InternalAxiosRequestConfig,
-    authenticationToken: AuthenticationToken | null,
-  ): Promise<InternalAxiosRequestConfig> {
-    if (authenticationToken) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${authenticationToken.accessToken}`;
+  public async update(
+    id: string,
+    entity: UpdateRequestDto,
+  ): Promise<ApiResponse<ResponseDto>> {
+    return this.makeApiRequest<UpdateRequestDto, ResponseDto>(
+      `/${id}`,
+      "put",
+      entity,
+      `Failed to update entity with ID ${id}`,
+    );
+  }
+
+  public async remove(id: string): Promise<ApiResponse<ResponseDto>> {
+    return this.makeApiRequest<undefined, ResponseDto>(
+      `/${id}`,
+      "delete",
+      undefined,
+      `Failed to delete entity with ID ${id}`,
+    );
+  }
+
+  public async findById(id: string): Promise<ApiResponse<ResponseDto>> {
+    return this.makeApiRequest<undefined, ResponseDto>(
+      `/${id}`,
+      "get",
+      undefined,
+      `Failed to fetch entity with ID ${id}`,
+    );
+  }
+
+  protected async makeApiRequest<RequestDto, ResponseDto>(
+    url: string,
+    method: "get" | "post" | "put" | "delete",
+    data?: RequestDto,
+    errorMessage?: string,
+  ): Promise<ApiResponse<ResponseDto>> {
+    try {
+      const response = await this.axiosInstance.request({
+        url,
+        method,
+        data,
+      });
+      this.logger.debug(
+        `Received client response: ${JSON.stringify(response.data)}`,
+      );
+      return { data: response.data };
+    } catch (error) {
+      return this.handleApiError(error, errorMessage || `API request failed`);
     }
-    return config;
+  }
+
+  private initializeInterceptors() {
+    this.initializeRequestInterceptors();
+    this.initializeResponseInterceptors();
+  }
+
+  private handleApiError<ResponseDto>(
+    error: unknown,
+    message: string,
+  ): ApiResponse<ResponseDto> {
+    let statusCode: number | null = null;
+    let errorMessage = message;
+    let errorBody = null;
+    if (error instanceof AxiosError) {
+      statusCode = error.response?.status ?? null;
+      errorBody = error.response?.data ?? null;
+      if (error.response) {
+        // Server responded with a status code outside 2xx
+        this.logger.error(
+          `${message}, status: ${statusCode}, body: ${JSON.stringify(errorBody)}`,
+        );
+        errorMessage += `, status: ${statusCode}, body: ${JSON.stringify(errorBody)}`;
+      } else if (error.request) {
+        // Request was made but no response was received
+        this.logger.error(`${message}, no response received`, error.request);
+        errorMessage += `, no response received`;
+      } else {
+        // Something happened while setting up the request
+        this.logger.error(`${message}, request setup error`, error.message);
+        errorMessage += `, request setup error: ${error.message}`;
+      }
+    } else {
+      // Non-Axios errors (for example, coding issues)
+      this.logger.error(message, error);
+    }
+    return {
+      data: null,
+      error: errorMessage,
+    };
+  }
+
+  private initializeResponseInterceptors() {
+    this.axiosInstance.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        this.logger.error("API call failed:", error);
+        return Promise.reject(error);
+      },
+    );
+  }
+
+  private initializeRequestInterceptors() {
+    this.axiosInstance.interceptors.request.use(
+      async (config: InternalAxiosRequestConfig) => {
+        if (!this.authenticationClient) {
+          return config;
+        }
+        const authHeaders = await this.authenticationClient.getAuthHeaders();
+        Object.entries(authHeaders).forEach(([key, value]) => {
+          config.headers?.set(key, value as string);
+        });
+        return config;
+      },
+      (error: AxiosError) => Promise.reject(error),
+    );
   }
 }

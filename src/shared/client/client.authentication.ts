@@ -1,78 +1,125 @@
-import { sleep } from "@nestjs/terminus/dist/utils";
-import axios, { AxiosResponse } from "axios";
+import { Logger } from "@nestjs/common";
+import { AxiosInstance } from "axios";
+import { isJWT } from "class-validator";
+import * as jwt from "jsonwebtoken";
 
-export interface AuthenticationToken {
-  accessToken: string;
-  refreshToken: string;
+import { createAxiosInstance } from "./client.util";
+
+export interface AuthenticationClientInterface {
+  getAuthHeaders(): Promise<Record<string, string>>;
 }
 
-export async function getValidToken(
-  authenticationToken: AuthenticationToken | null,
-): Promise<AuthenticationToken | null> {
-  if (authenticationToken && !isTokenExpired(authenticationToken.accessToken)) {
-    return authenticationToken;
-  }
-  if (!authenticationToken) {
-    for (let retryCount = 0; retryCount < 3; retryCount++) {
-      authenticationToken = await createAuthenticationToken();
-      if (authenticationToken) {
-        break;
-      }
-      sleep((1 << retryCount) * 1000);
-    }
-  }
-  if (!authenticationToken) {
-    return null;
-  }
-  for (let retryCount = 0; retryCount < 3; retryCount++) {
-    const newToken = await refreshAccessToken(authenticationToken.refreshToken);
-    if (newToken) {
-      authenticationToken.accessToken = newToken;
-      break;
-    }
-    sleep((1 << retryCount) * 1000);
-  }
-  return authenticationToken;
+interface AuthenticationToken {
+  accessToken: string | null;
+  refreshToken: string | null;
 }
 
-function isTokenExpired(accessToken: string): boolean {
-  const payloadBase64 = accessToken.split(".")[1];
-  const decodedPayload = JSON.parse(atob(payloadBase64));
-  const currentTime = Math.floor(Date.now() / 1000);
-  return decodedPayload.exp < currentTime;
+interface AuthenticationClientOptions {
+  loginAPI: string;
+  refreshTokenAPI: string;
 }
 
-async function createAuthenticationToken(): Promise<AuthenticationToken | null> {
-  try {
-    const response: AxiosResponse<{
-      access_token: string;
-      refresh_token: string;
-    }> = await axios.post("/auth/create-token", {
-      // any necessary payload
-    });
-    return {
-      accessToken: response.data.access_token,
-      refreshToken: response.data.refresh_token,
+const DefaultAuthenticationClientOptions: AuthenticationClientOptions = {
+  loginAPI: "auth/login",
+  refreshTokenAPI: "auth/refresh",
+};
+
+export class AuthenticationClient implements AuthenticationClientInterface {
+  protected readonly logger = new Logger(AuthenticationClient.name);
+
+  private readonly axiosInstance: AxiosInstance;
+  private readonly authenticationToken: AuthenticationToken;
+  private readonly authenticationClientOptions: AuthenticationClientOptions;
+
+  constructor(
+    baseURL: string,
+    authenticationClientOptions: AuthenticationClientOptions = DefaultAuthenticationClientOptions,
+    accessToken?: string,
+    refreshToken?: string,
+  ) {
+    this.axiosInstance = createAxiosInstance(baseURL);
+    this.authenticationClientOptions = authenticationClientOptions;
+    this.authenticationToken = {
+      accessToken: accessToken ?? null,
+      refreshToken: refreshToken ?? null,
     };
-  } catch (error) {
-    console.error("Failed to create new authentication token:", error);
+  }
+
+  public async getAuthHeaders(): Promise<Record<string, string>> {
+    if (!this.authenticationToken) {
+      return {};
+    }
+    const token = await this.getToken();
+    if (!token) {
+      this.logger.debug("Failed to get valid token");
+      return {};
+    }
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  private async getToken(): Promise<string | null> {
+    if (this.isAuthenticationTokenValid()) {
+      return this.authenticationToken.accessToken;
+    }
+    if (
+      this.authenticationToken.refreshToken &&
+      !isTokenExpired(this.authenticationToken.refreshToken)
+    ) {
+      await this.refreshAuthenticationToken();
+    }
+    if (this.isAuthenticationTokenValid()) {
+      return this.authenticationToken.accessToken;
+    }
+    await this.createAuthenticationToken();
+    if (this.isAuthenticationTokenValid()) {
+      return this.authenticationToken.accessToken;
+    }
     return null;
+  }
+
+  private isAuthenticationTokenValid(): boolean {
+    if (!this.authenticationToken.accessToken) {
+      this.logger.debug(
+        `Invalid authentication token: ${this.authenticationToken.accessToken}`,
+      );
+      return false;
+    }
+    if (!isJWT(this.authenticationToken.accessToken)) {
+      this.logger.debug(
+        `Invalid authentication token: ${this.authenticationToken.accessToken}`,
+      );
+      return false;
+    }
+    return !isTokenExpired(this.authenticationToken.accessToken);
+  }
+
+  private async createAuthenticationToken(): Promise<void> {
+    this.logger.debug("Creating authentication token...");
+    this.authenticationToken.accessToken = generateToken();
+    this.authenticationToken.refreshToken = generateToken();
+    this.logger.debug("Created authentication token");
+  }
+
+  private async refreshAuthenticationToken(): Promise<void> {
+    this.logger.debug("Refreshing authentication token...");
+    this.authenticationToken.accessToken = generateToken();
+    this.logger.debug("Refreshed authentication token");
   }
 }
 
-async function refreshAccessToken(
-  refreshToken: string,
-): Promise<string | null> {
-  try {
-    const response: AxiosResponse<{ access_token: string }> = await axios.post(
-      "/auth/refresh",
-      {
-        refresh_token: refreshToken,
-      },
-    );
-    return response.data.access_token;
-  } catch (error) {
-    console.error("Failed to refresh access token:", error);
-    return null;
-  }
+function isTokenExpired(token: string): boolean {
+  return false;
+}
+
+function generateToken(): string {
+  return jwt.sign(
+    {
+      userId: "123456",
+      username: "exampleUser",
+    },
+    "your_secret_key",
+    {
+      expiresIn: "5m",
+    },
+  );
 }
