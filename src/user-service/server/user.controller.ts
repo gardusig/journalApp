@@ -1,44 +1,64 @@
-import { Body, Inject, Param } from "@nestjs/common";
-
+import { Body, Param } from "@nestjs/common";
+import { User } from "@prisma/client";
 import {
-  AbstractController,
-  ApiResponse,
-} from "../../shared/server/api/abstract.controller";
-import { AbstractService } from "../../shared/server/api/abstract.service";
-import { UserDto } from "../dto/user.dto";
-import { UserServiceToken } from "./user.service";
+  CreateUserRequest,
+  UpdateUserRequest,
+} from "user-service/dto/user.request.dto";
 
-@AbstractController.ApplyDecoratorsController("user")
-export class UserController extends AbstractController<UserDto> {
-  constructor(@Inject(UserServiceToken) service: AbstractService<UserDto>) {
+import { AbstractController } from "../../shared/server/api/abstract.controller";
+import {
+  ApplyDecoratorsController,
+  ApplyDecoratorsCreate,
+  ApplyDecoratorsDelete,
+  ApplyDecoratorsGetAll,
+  ApplyDecoratorsGetById,
+  ApplyDecoratorsUpdate,
+} from "../../shared/server/api/abstract.decorator";
+import {
+  UserListResponse,
+  UserResponse,
+} from "../../user-service/dto/user.response.dto";
+import { UserService } from "./user.service";
+
+@ApplyDecoratorsController("user")
+export class UserController extends AbstractController<
+  User,
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserResponse,
+  UserListResponse
+> {
+  constructor(service: UserService) {
     super(service);
   }
 
-  @AbstractController.ApplyDecoratorsGetById("user", UserDto)
-  async findById(@Param("id") id: string): ApiResponse<UserDto | null> {
-    return super.findById(id);
+  @ApplyDecoratorsGetById("user", UserResponse)
+  public async findById(@Param("id") id: string): Promise<UserResponse | null> {
+    return await super.findById(id);
   }
 
-  @AbstractController.ApplyDecoratorsGetAll(UserDto)
-  async findAll(): ApiResponse<UserDto[]> {
-    return super.findAll();
+  @ApplyDecoratorsGetAll(UserListResponse)
+  public async findAll(): Promise<UserListResponse | null> {
+    return await super.findAll();
   }
 
-  @AbstractController.ApplyDecoratorsCreate(UserDto)
-  async create(@Body() entity: UserDto): ApiResponse<UserDto> {
-    return super.create(entity);
+  @ApplyDecoratorsCreate(UserResponse)
+  public async create(
+    @Body() entity: CreateUserRequest,
+  ): Promise<UserResponse | null> {
+    return await super.create(entity);
   }
 
-  @AbstractController.ApplyDecoratorsUpdate(UserDto)
-  async update(
+  @ApplyDecoratorsUpdate(UserResponse)
+  public async update(
     @Param("id") id: string,
-    @Body() entity: UserDto,
-  ): ApiResponse<UserDto | null> {
-    return super.update(id, entity);
+    @Body() entity: UpdateUserRequest,
+  ): Promise<UserResponse | null> {
+    return await super.update(id, entity);
   }
 
-  @AbstractController.ApplyDecoratorsDelete(UserDto)
-  async delete(@Param("id") id: string): ApiResponse<UserDto | null> {
-    return super.delete(id);
+  @ApplyDecoratorsDelete(UserResponse)
+  public async delete(@Param("id") id: string): Promise<UserResponse | null> {
+    return await super.delete(id);
   }
 }

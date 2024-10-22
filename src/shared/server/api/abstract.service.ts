@@ -1,61 +1,113 @@
 import { Logger } from "@nestjs/common";
 
-export interface DatabaseMethods<T> {
-  findUnique(...args: any): Promise<T | null>;
-  findMany(...args: any): Promise<T[]>;
-  create(...args: any): Promise<T>;
-  update(...args: any): Promise<T>;
-  delete(...args: any): Promise<T>;
+export interface DatabaseMethods<DatabaseEntity> {
+  findUnique(...args: any): Promise<DatabaseEntity | null>;
+  findMany(...args: any): Promise<DatabaseEntity[]>;
+  create(...args: any): Promise<DatabaseEntity>;
+  update(...args: any): Promise<DatabaseEntity>;
+  delete(...args: any): Promise<DatabaseEntity>;
 }
 
-export abstract class AbstractService<T> {
+export abstract class AbstractService<
+  DatabaseEntity,
+  CreateRequestDto,
+  UpdateRequestDto,
+  ResponseDto,
+  ResponseListDto,
+> {
   protected readonly logger = new Logger(AbstractService.name);
-  protected readonly database: DatabaseMethods<T>;
+  protected readonly database: DatabaseMethods<DatabaseEntity>;
 
   private readonly idKey: string;
 
-  constructor(database: DatabaseMethods<T>, idKey: string) {
+  constructor(database: DatabaseMethods<DatabaseEntity>, idKey: string) {
     this.database = database;
     this.idKey = idKey;
   }
 
-  // Abstract method for creating an entity (to be implemented by subclass)
-  abstract create(entity: T): Promise<T>;
+  protected abstract getConvertedEntity(
+    databaseEntity: DatabaseEntity | null,
+  ): ResponseDto | null;
 
-  // Find an entity by ID
-  async findById(id: string): Promise<T | null> {
+  protected abstract getConvertedEntityList(
+    databaseEntityList: DatabaseEntity[] | null,
+  ): ResponseListDto | null;
+
+  public async findById(id: string): Promise<ResponseDto | null> {
     try {
-      return await this.findBy(this.idKey, id);
+      return await this.findEntityBy(this.idKey, id);
     } catch (error) {
       this.handleError(error);
       return null;
     }
   }
 
-  // Find all entities
-  async findAll(): Promise<T[]> {
+  public async findAll(): Promise<ResponseListDto | null> {
     try {
-      return await this.database.findMany();
+      const databaseEntityList = await this.database.findMany();
+      return this.getConvertedEntityList(databaseEntityList);
     } catch (error) {
       this.handleError(error);
-      return [];
+      return null;
     }
   }
 
-  // Find an entity by a specific key-value pair
-  async findBy(key: string, value: any): Promise<T | null> {
+  public async remove(id: string): Promise<ResponseDto | null> {
     try {
-      return await this.database.findUnique({
+      const databaseEntity = await this.database.delete({
+        where: { [this.idKey]: id },
+      });
+      return this.getConvertedEntity(databaseEntity);
+    } catch (error) {
+      this.handleError(error);
+      return null;
+    }
+  }
+
+  public async update(
+    id: string,
+    entity: UpdateRequestDto,
+  ): Promise<ResponseDto | null> {
+    try {
+      const updatedEntity = await this.database.update({
+        where: { [this.idKey]: id },
+        data: entity,
+      });
+      return this.getConvertedEntity(updatedEntity);
+    } catch (error) {
+      this.handleError(error);
+      return null;
+    }
+  }
+
+  public async add(entity: CreateRequestDto): Promise<ResponseDto | null> {
+    try {
+      const databaseEntity = await this.database.create({ data: entity });
+      return this.getConvertedEntity(databaseEntity);
+    } catch (error) {
+      this.handleError(error);
+      return null;
+    }
+  }
+
+  protected async findEntityBy(
+    key: string,
+    value: any,
+  ): Promise<ResponseDto | null> {
+    try {
+      const databaseEntity = await this.database.findUnique({
         where: { [key]: value },
       });
+      return this.getConvertedEntity(databaseEntity);
     } catch (error) {
       this.handleError(error);
       return null;
     }
   }
 
-  // Find an entity by a where clause
-  async findWhere(whereClause: Record<string, any>): Promise<T | null> {
+  protected async findEntityWhere(
+    whereClause: Record<string, any>,
+  ): Promise<DatabaseEntity | null> {
     try {
       return await this.database.findUnique({
         where: whereClause,
@@ -66,36 +118,11 @@ export abstract class AbstractService<T> {
     }
   }
 
-  // Update an entity by ID
-  async update(id: string, entity: T): Promise<T | null> {
-    try {
-      return await this.database.update({
-        where: { [this.idKey]: id },
-        data: entity,
-      });
-    } catch (error) {
-      this.handleError(error);
-      return null;
-    }
-  }
-
-  // Delete an entity by ID
-  async delete(id: string): Promise<T | null> {
-    try {
-      return await this.database.delete({
-        where: { [this.idKey]: id },
-      });
-    } catch (error) {
-      this.handleError(error);
-      return null;
-    }
-  }
-
-  // Handle errors (logging)
   protected handleError(error: any): void {
     this.logger.error(
       `Database operation failed: ${error.message}`,
       error.stack,
     );
+    throw error;
   }
 }

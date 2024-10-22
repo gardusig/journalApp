@@ -13,13 +13,12 @@ export class AuthMiddleware implements NestMiddleware {
         `, params: ${JSON.stringify(req.params)}` +
         `, body: ${JSON.stringify(req.body)}`,
     );
-    const authHeader = req.headers["authorization"]; // Get Authorization header
+    const authHeader = req.headers["authorization"];
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
         .status(HttpStatus.UNAUTHORIZED)
         .json({ message: "Authorization header is missing or invalid" });
     }
-    this.logger.debug("token: ", authHeader);
     next();
   }
 }

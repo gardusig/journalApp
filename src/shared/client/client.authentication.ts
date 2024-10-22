@@ -6,7 +6,7 @@ import * as jwt from "jsonwebtoken";
 import { createAxiosInstance } from "./client.util";
 
 export interface AuthenticationClientInterface {
-  getValidToken(): Promise<string | null>;
+  getAuthHeaders(): Promise<Record<string, string>>;
 }
 
 interface AuthenticationToken {
@@ -45,7 +45,19 @@ export class AuthenticationClient implements AuthenticationClientInterface {
     };
   }
 
-  public async getValidToken(): Promise<string | null> {
+  public async getAuthHeaders(): Promise<Record<string, string>> {
+    if (!this.authenticationToken) {
+      return {};
+    }
+    const token = await this.getToken();
+    if (!token) {
+      this.logger.debug("Failed to get valid token");
+      return {};
+    }
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  private async getToken(): Promise<string | null> {
     if (this.isAuthenticationTokenValid()) {
       return this.authenticationToken.accessToken;
     }
@@ -67,29 +79,36 @@ export class AuthenticationClient implements AuthenticationClientInterface {
 
   private isAuthenticationTokenValid(): boolean {
     if (!this.authenticationToken.accessToken) {
+      this.logger.debug(
+        `Invalid authentication token: ${this.authenticationToken.accessToken}`,
+      );
+      return false;
+    }
+    if (!isJWT(this.authenticationToken.accessToken)) {
+      this.logger.debug(
+        `Invalid authentication token: ${this.authenticationToken.accessToken}`,
+      );
       return false;
     }
     return !isTokenExpired(this.authenticationToken.accessToken);
   }
 
   private async createAuthenticationToken(): Promise<void> {
+    this.logger.debug("Creating authentication token...");
     this.authenticationToken.accessToken = generateToken();
     this.authenticationToken.refreshToken = generateToken();
-    console.debug("Created authentication token");
+    this.logger.debug("Created authentication token");
   }
 
   private async refreshAuthenticationToken(): Promise<void> {
+    this.logger.debug("Refreshing authentication token...");
     this.authenticationToken.accessToken = generateToken();
-    console.debug("Refreshed authentication token");
+    this.logger.debug("Refreshed authentication token");
   }
 }
 
 function isTokenExpired(token: string): boolean {
-  console.debug("Validating token:", token);
-  if (!isJWT(token)) {
-    return false;
-  }
-  return true;
+  return false;
 }
 
 function generateToken(): string {

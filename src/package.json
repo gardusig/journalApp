@@ -4,7 +4,8 @@
     "scripts": {
         "build": "nest build",
         "start:user-service": "node dist/user-service/server/main.js",
-        "test": "jest --coverage",
+        "test": "jest",
+        "test:coverage": "jest --coverage",
         "lint": "eslint './**/*.ts'",
         "format": "eslint './**/*.ts' --fix",
         "prisma:deploy": "npx prisma migrate deploy --schema ./prisma/database/schema.prisma",

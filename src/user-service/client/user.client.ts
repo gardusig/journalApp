@@ -1,7 +1,13 @@
 import { AbstractApiClient } from "../../shared/client/client.abstract";
-import { UserDto } from "../../user-service/dto/user.dto";
+import { CreateUserRequest, UpdateUserRequest } from "../dto/user.request.dto";
+import { UserListResponse, UserResponse } from "../dto/user.response.dto";
 
-export class UserServiceClient extends AbstractApiClient<UserDto> {
+export class UserServiceClient extends AbstractApiClient<
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserResponse,
+  UserListResponse
+> {
   constructor(baseUrl: string) {
     super(baseUrl, "user");
   }
