@@ -2,7 +2,10 @@ import { Logger } from "@nestjs/common";
 import { isJWT } from "class-validator";
 import * as jwt from "jsonwebtoken";
 
-import { TokenClient, TokenClientInterface } from "./client.token";
+import {
+  TokenClient,
+  TokenClientInterface,
+} from "../token-service/client/token.client";
 
 export interface AuthenticationClientInterface {
   getAuthHeaders(): Promise<Record<string, string>>;

@@ -32,6 +32,8 @@
         "@nestjs/swagger": "^7.4.2",
         "@nestjs/terminus": "^10.2.3",
         "@prisma/client": "^5.20.0",
+        "@vendia/serverless-express": "^4.12.6",
+        "aws-lambda": "^1.0.7",
         "axios": "1.7.4",
         "axios-mock-adapter": "^2.0.0",
         "axios-retry": "^4.5.0",

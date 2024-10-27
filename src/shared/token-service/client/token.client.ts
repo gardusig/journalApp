@@ -2,7 +2,7 @@ import { Logger } from "@nestjs/common";
 import { AxiosInstance } from "axios";
 import * as jwt from "jsonwebtoken";
 
-import { createAxiosInstance } from "./client.util";
+import { createAxiosInstance } from "../../client/client.util";
 
 interface TokenResponse {
   accessToken: string;
