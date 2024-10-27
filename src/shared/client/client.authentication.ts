@@ -1,9 +1,11 @@
 import { Logger } from "@nestjs/common";
-import { AxiosInstance } from "axios";
 import { isJWT } from "class-validator";
 import * as jwt from "jsonwebtoken";
 
-import { createAxiosInstance } from "./client.util";
+import {
+  TokenClient,
+  TokenClientInterface,
+} from "../token-service/client/token.client";
 
 export interface AuthenticationClientInterface {
   getAuthHeaders(): Promise<Record<string, string>>;
@@ -14,31 +16,18 @@ interface AuthenticationToken {
   refreshToken: string | null;
 }
 
-interface AuthenticationClientOptions {
-  loginAPI: string;
-  refreshTokenAPI: string;
-}
-
-const DefaultAuthenticationClientOptions: AuthenticationClientOptions = {
-  loginAPI: "auth/login",
-  refreshTokenAPI: "auth/refresh",
-};
-
 export class AuthenticationClient implements AuthenticationClientInterface {
   protected readonly logger = new Logger(AuthenticationClient.name);
 
-  private readonly axiosInstance: AxiosInstance;
+  private readonly tokenClient: TokenClientInterface;
   private readonly authenticationToken: AuthenticationToken;
-  private readonly authenticationClientOptions: AuthenticationClientOptions;
 
   constructor(
-    baseURL: string,
-    authenticationClientOptions: AuthenticationClientOptions = DefaultAuthenticationClientOptions,
+    tokenClient?: TokenClientInterface,
     accessToken?: string,
     refreshToken?: string,
   ) {
-    this.axiosInstance = createAxiosInstance(baseURL);
-    this.authenticationClientOptions = authenticationClientOptions;
+    this.tokenClient = tokenClient ?? new TokenClient();
     this.authenticationToken = {
       accessToken: accessToken ?? null,
       refreshToken: refreshToken ?? null,
@@ -61,30 +50,37 @@ export class AuthenticationClient implements AuthenticationClientInterface {
     if (this.isAuthenticationTokenValid()) {
       return this.authenticationToken.accessToken;
     }
-    if (
-      this.authenticationToken.refreshToken &&
-      !isTokenExpired(this.authenticationToken.refreshToken)
-    ) {
-      await this.refreshAuthenticationToken();
+    if (this.authenticationToken.refreshToken) {
+      try {
+        const tokenResponse = await this.tokenClient.refreshAuthenticationToken(
+          this.authenticationToken.refreshToken,
+        );
+        this.authenticationToken.accessToken = tokenResponse.accessToken;
+      } catch (error) {
+        this.logger.error("Token refresh failed", error);
+      }
     }
-    if (this.isAuthenticationTokenValid()) {
-      return this.authenticationToken.accessToken;
+    if (!this.isAuthenticationTokenValid()) {
+      try {
+        const tokenResponse =
+          await this.tokenClient.createAuthenticationToken();
+        this.authenticationToken.accessToken = tokenResponse.accessToken;
+        this.authenticationToken.refreshToken =
+          tokenResponse.refreshToken || null;
+      } catch (error) {
+        this.logger.error("Token creation failed", error);
+      }
     }
-    await this.createAuthenticationToken();
-    if (this.isAuthenticationTokenValid()) {
-      return this.authenticationToken.accessToken;
-    }
-    return null;
+    return this.isAuthenticationTokenValid()
+      ? this.authenticationToken.accessToken
+      : null;
   }
 
   private isAuthenticationTokenValid(): boolean {
-    if (!this.authenticationToken.accessToken) {
-      this.logger.debug(
-        `Invalid authentication token: ${this.authenticationToken.accessToken}`,
-      );
-      return false;
-    }
-    if (!isJWT(this.authenticationToken.accessToken)) {
+    if (
+      !this.authenticationToken.accessToken ||
+      !isJWT(this.authenticationToken.accessToken)
+    ) {
       this.logger.debug(
         `Invalid authentication token: ${this.authenticationToken.accessToken}`,
       );
@@ -92,34 +88,13 @@ export class AuthenticationClient implements AuthenticationClientInterface {
     }
     return !isTokenExpired(this.authenticationToken.accessToken);
   }
-
-  private async createAuthenticationToken(): Promise<void> {
-    this.logger.debug("Creating authentication token...");
-    this.authenticationToken.accessToken = generateToken();
-    this.authenticationToken.refreshToken = generateToken();
-    this.logger.debug("Created authentication token");
-  }
-
-  private async refreshAuthenticationToken(): Promise<void> {
-    this.logger.debug("Refreshing authentication token...");
-    this.authenticationToken.accessToken = generateToken();
-    this.logger.debug("Refreshed authentication token");
-  }
 }
 
 function isTokenExpired(token: string): boolean {
-  return false;
-}
-
-function generateToken(): string {
-  return jwt.sign(
-    {
-      userId: "123456",
-      username: "exampleUser",
-    },
-    "your_secret_key",
-    {
-      expiresIn: "5m",
-    },
-  );
+  const decoded: any = jwt.decode(token);
+  if (!decoded || !decoded.exp) {
+    return true;
+  }
+  const currentTime = Math.floor(Date.now() / 1000);
+  return decoded.exp < currentTime;
 }

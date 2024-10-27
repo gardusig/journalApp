@@ -4,7 +4,7 @@ import { CreateUserRequest, UpdateUserRequest } from "../dto/user.request.dto";
 
 const baseUrl = "http://localhost:3000/api";
 
-const authenticationClient = new AuthenticationClient(baseUrl);
+const authenticationClient = new AuthenticationClient();
 const userServiceClient = new UserServiceClient(
   baseUrl,
 ).withAuthenticationClient(authenticationClient);
