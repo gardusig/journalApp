@@ -1,37 +1,23 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { ConfigModule } from "@nestjs/config";
-import { NestFactory } from "@nestjs/core";
 
-import { configureSwagger } from "../../shared/server/docs/swagger";
+import { createModule } from "../../shared/server/api/abstract.module";
+import { bootstrap } from "../../shared/server/config/config.startup";
 import { HealthModule } from "../../shared/server/health/module";
 import { AuthMiddleware } from "../../shared/server/middleware/authentication";
 import { UserModule } from "./user.module";
 
-@Module({
-  imports: [
-    UserModule,
-    HealthModule,
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-  ],
-})
+const configSettings: Record<string, any> = {
+  envFilePath:
+    process.env.NODE_ENV === "production"
+      ? ".env.production"
+      : ".env.development",
+};
+
+@Module(createModule([UserModule, HealthModule], configSettings))
 class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(AuthMiddleware).exclude("health_check").forRoutes("*");
   }
 }
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: ["verbose"],
-  });
-  app.setGlobalPrefix("api");
-  configureSwagger(app);
-  const configService = app.get(ConfigService);
-  const port = configService.get<number>("PORT", 3000);
-  await app.listen(port);
-}
-
-bootstrap();
+bootstrap(AppModule);
