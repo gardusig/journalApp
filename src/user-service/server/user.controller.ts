@@ -37,27 +37,27 @@ export class UserController extends AbstractController<
     return await super.findById(id);
   }
 
-  @ApplyDecoratorsGetAll(UserListResponse)
+  @ApplyDecoratorsGetAll("user", UserListResponse)
   public async findAll(): Promise<UserListResponse | null> {
     return await super.findAll();
   }
 
-  @ApplyDecoratorsCreate(UserResponse)
+  @ApplyDecoratorsCreate("user", CreateUserRequest, UserResponse)
   public async create(
-    @Body() entity: CreateUserRequest,
+    @Body() entity: CreateUserRequest
   ): Promise<UserResponse | null> {
     return await super.create(entity);
   }
 
-  @ApplyDecoratorsUpdate(UserResponse)
+  @ApplyDecoratorsUpdate("user", UpdateUserRequest, UserResponse)
   public async update(
     @Param("id") id: string,
-    @Body() entity: UpdateUserRequest,
+    @Body() entity: UpdateUserRequest
   ): Promise<UserResponse | null> {
     return await super.update(id, entity);
   }
 
-  @ApplyDecoratorsDelete(UserResponse)
+  @ApplyDecoratorsDelete("user", UserResponse)
   public async delete(@Param("id") id: string): Promise<UserResponse | null> {
     return await super.delete(id);
   }
