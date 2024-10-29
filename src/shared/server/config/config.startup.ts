@@ -38,11 +38,11 @@ function createLambdaHandler(app: INestApplication<any>): Handler {
 export const handler: Handler = async (
   event: any,
   context: Context,
-  callback: Callback
+  callback: Callback,
 ) => {
   if (!lambdaHandler) {
     throw new Error(
-      "Handler has not been initialized. Ensure bootstrap() has been called."
+      "Handler has not been initialized. Ensure bootstrap() has been called.",
     );
   }
   return lambdaHandler(event, context, callback);
